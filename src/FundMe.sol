@@ -1,40 +1,45 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import {AggregatorV3Interface} from "lib/chainlink-brownie-contracts/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {PriceConverter} from "./PriceConverter.sol";
+import {console} from "../lib/forge-std/src/console.sol";
 
-error NotOwner();
+error FundMe__NotOwner();
 
-contract FundMe {
+contract FundMe{
     using PriceConverter for uint256;
 
     mapping(address => uint256) public addressToAmountFunded;
     address[] public funders;
+    uint256 public valueAfterFunded;
 
     // Could we make this constant?  /* hint: no! We should make it immutable! */
     address public /* immutable */ i_owner;
+    address public s_pricefeed;
     uint256 public constant MINIMUM_USD = 5 * 10 ** 18;
     
-    constructor() {
+    constructor(address pricefeed) {
         i_owner = msg.sender;
+        s_pricefeed = pricefeed;
     }
 
     function fund() public payable {
-        require(msg.value.getConversionRate() >= MINIMUM_USD, "You need to spend more ETH!");
+        valueAfterFunded = msg.value.getConversionRate(s_pricefeed);
+        require(msg.value.getConversionRate(s_pricefeed) >= MINIMUM_USD, "You need to spend more ETH!");
         // require(PriceConverter.getConversionRate(msg.value) >= MINIMUM_USD, "You need to spend more ETH!");
         addressToAmountFunded[msg.sender] += msg.value;
         funders.push(msg.sender);
     }
     
     function getVersion() public view returns (uint256){
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_pricefeed);
         return priceFeed.version();
     }
     
     modifier onlyOwner {
         // require(msg.sender == owner);
-        if (msg.sender != i_owner) revert NotOwner();
+        if (msg.sender != i_owner) revert FundMe__NotOwner();
         _;
     }
     
